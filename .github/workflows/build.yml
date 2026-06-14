@@ -2,14 +2,14 @@ name: Tests
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-    - 'main'
-    - '3.*'
-  pull_request:
-    branches:
-    - 'main'
-    - '3.*'
+  # push:
+  #   branches:
+  #   - 'main'
+  #   - '3.*'
+  # pull_request:
+  #   branches:
+  #   - 'main'
+  #   - '3.*'
 
 permissions:
   contents: read
