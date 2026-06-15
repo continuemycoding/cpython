@@ -1,0 +1,86 @@
+# 越狱机命令行 Python：把 libpython 和全部标准库 C 扩展都静态链接进解释器，
+# 既不依赖 Python.framework，也没有任何 .so 需要 dlopen，
+# 从而绕开 roothide 沙盒对可执行文件 mmap() 的拦截。
+name: Build CLI Python
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build-ios:
+    name: iOS CLI runtime (arm64)
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build iOS Python (static libpython + static stdlib modules)
+        run: |
+          set -euo pipefail
+          # 1. 先构建 macOS 上的 build Python
+          python3 Platforms/Apple build --clean iOS build
+          # 2. 构建 iOS 目标：
+          #    --enable-static-libpython-for-interpreter -> 解释器静态链接 libpython（不连 framework）
+          #    MODULE_BUILDTYPE=static                   -> 标准库 C 扩展全部编译进解释器（无 lib-dynload .so）
+          MODULE_BUILDTYPE=static python3 Platforms/Apple build iOS arm64-apple-ios -- \
+            --enable-static-libpython-for-interpreter MODULE_BUILDTYPE=static
+
+      - name: Assemble CLI runtime
+        run: |
+          set -euo pipefail
+          SRC="cross-build/arm64-apple-ios/Platforms/Apple/iOS/Frameworks/arm64-iphoneos"
+          BUILT_BIN="cross-build/arm64-apple-ios/python.exe"
+          DEST="cpython-ios-arm64"
+
+          rm -rf "$DEST"
+          mkdir -p "$DEST/bin"
+          # 解释器本体（自包含，只依赖系统库），不需要 Python.framework
+          cp "$BUILT_BIN" "$DEST/bin/python3.16"
+          ln -sf python3.16 "$DEST/bin/python3"
+          rsync -a --exclude='*.o' "$SRC/lib/" "$DEST/lib/"
+
+      - name: Slim down runtime
+        run: |
+          set -euo pipefail
+          DEST="cpython-ios-arm64"
+          PYDIR="$(ls -d "$DEST"/lib/python3.* 2>/dev/null | head -1)"
+          echo "before: $(du -sh "$DEST" | cut -f1)"
+
+          find "$PYDIR" -type d \( -name test -o -name tests \) -prune -exec rm -rf {} +
+          rm -rf "$PYDIR"/config-* "$PYDIR"/idlelib "$PYDIR"/turtledemo \
+                 "$PYDIR"/tkinter "$PYDIR"/lib2to3 "$PYDIR"/pydoc_data
+          find "$PYDIR" -type d -name __pycache__ -prune -exec rm -rf {} +
+          # 所有标准库 C 扩展都是内建的；lib-dynload 里只剩用不到的测试 .so，
+          # 而且 .so 在 roothide 沙盒下会被 mmap() 拦截，直接删掉。
+          rm -rf "$PYDIR"/lib-dynload
+
+          echo "after:  $(du -sh "$DEST" | cut -f1)"
+
+      - name: Ad-hoc sign and wrap launcher
+        run: |
+          set -euo pipefail
+          DEST="cpython-ios-arm64"
+          ENT=".github/ios-cli.entitlements"
+          PYTHON_BIN="$DEST/bin/python3.16"
+
+          # 只有这一个二进制需要签名；带上越狱 entitlements 才能在设备上启动。
+          codesign -f -s - --entitlements "$ENT" "$PYTHON_BIN"
+          chmod +x "$PYTHON_BIN"
+
+          # 启动器：不要设置 PYTHONHOME。让解释器按可执行文件位置自动定位标准库，
+          # 这样在 roothide 的 jbroot 路径映射下也能正确找到 lib/python3.16。
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'ROOT="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"' \
+            'exec "$ROOT/bin/python3" "$@"' \
+            > "$DEST/run-python3"
+          chmod +x "$DEST/run-python3"
+
+          echo "=== python3 dependencies (应只有系统库) ==="
+          otool -L "$PYTHON_BIN"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpython-ios-arm64-cli
+          path: cpython-ios-arm64/

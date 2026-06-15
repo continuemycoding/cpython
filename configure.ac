@@ -3797,7 +3797,14 @@ then
 			fi
 			LINKFORSHARED="$LINKFORSHARED"
 		elif test $ac_sys_system = "iOS"; then
-			LINKFORSHARED="-Wl,-stack_size,$stack_size $LINKFORSHARED "'$(PYTHONFRAMEWORKDIR)/$(PYTHONFRAMEWORK)'
+			LINKFORSHARED="-Wl,-stack_size,$stack_size $LINKFORSHARED"
+			# When statically linking libpython into the interpreter, do not
+			# also link the Python.framework: the resulting binary must be
+			# self-contained (e.g. CLI use on jailbroken iOS, where mmap() of
+			# the framework is blocked by the sandbox).
+			if test "$enable_static_libpython_for_interpreter" != "yes"; then
+				LINKFORSHARED="$LINKFORSHARED "'$(PYTHONFRAMEWORKDIR)/$(PYTHONFRAMEWORK)'
+			fi
 		fi
 		;;
 	OpenUNIX*|UnixWare*) LINKFORSHARED="-Wl,-Bexport";;

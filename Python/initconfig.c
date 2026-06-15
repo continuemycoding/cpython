@@ -27,12 +27,9 @@
 #endif
 
 #ifdef __APPLE__
-/* Enable system log by default on non-macOS Apple platforms */
-#  if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
-#define USE_SYSTEM_LOGGER_DEFAULT 1;
-#  else
+/* The system logger is the right default for GUI apps embedding CPython, but
+ * the command-line interpreter (e.g. on jailbroken iOS) needs stdout/stderr. */
 #define USE_SYSTEM_LOGGER_DEFAULT 0;
-#  endif
 #endif
 
 #include "config_common.h"

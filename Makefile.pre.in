@@ -1097,11 +1097,11 @@ $(PYTHONFRAMEWORKDIR)/$(PYTHONFRAMEWORK): \
 		$(RESSRCDIR)/Info.plist
 	$(INSTALL) -d -m $(DIRMODE) $(PYTHONFRAMEWORKDIR)
 	$(CC) -o $(LDLIBRARY) $(PY_CORE_LDFLAGS) -dynamiclib \
-		-all_load $(LIBRARY) \
+		-force_load $(LIBRARY) \
 		-install_name $(PYTHONFRAMEWORKINSTALLNAMEPREFIX)/$(PYTHONFRAMEWORK) \
 		-compatibility_version $(VERSION) \
 		-current_version $(VERSION) \
-		-framework CoreFoundation $(LIBS);
+		-framework CoreFoundation $(LIBS) $(MODLIBS);
 	$(INSTALL_DATA) $(RESSRCDIR)/Info.plist $(PYTHONFRAMEWORKDIR)/Info.plist
 
 # This rule builds the Cygwin Python DLL and import library if configured
