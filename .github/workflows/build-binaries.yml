@@ -54,8 +54,11 @@ jobs:
           # 所有标准库 C 扩展都是内建的；lib-dynload 里只剩用不到的测试 .so，
           # 而且 .so 在 roothide 沙盒下会被 mmap() 拦截，直接删掉。
           rm -rf "$PYDIR"/lib-dynload
-          # getpath 使用此目录作为 exec_prefix 标志；扩展已静态链接，保留空目录即可。
+          # getpath 使用此目录作为 exec_prefix 标志。产物打包会丢弃空目录，
+          # 因此放置一个非隐藏说明文件；扩展仍全部静态链接。
           mkdir -p "$PYDIR"/lib-dynload
+          printf '%s\n' 'C extension modules are statically linked into this interpreter.' \
+            > "$PYDIR"/lib-dynload/README.txt
 
           echo "after:  $(du -sh "$DEST" | cut -f1)"
 
@@ -74,7 +77,8 @@ jobs:
           # CLI 包运行时，必须把 PYTHONHOME 指向包根目录，才能找到 lib/python3.16。
           printf '%s\n' \
             '#!/bin/sh' \
-            'ROOT="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"' \
+            'ROOT="$(CDPATH= cd -- "$(dirname "$0")" && pwd -P)"' \
+            'ROOT="${ROOT#/rootfs}"' \
             'export PYTHONHOME="$ROOT"' \
             'exec "$ROOT/bin/python3" "$@"' \
             > "$DEST/run-python3"
