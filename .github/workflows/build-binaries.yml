@@ -54,6 +54,8 @@ jobs:
           # 所有标准库 C 扩展都是内建的；lib-dynload 里只剩用不到的测试 .so，
           # 而且 .so 在 roothide 沙盒下会被 mmap() 拦截，直接删掉。
           rm -rf "$PYDIR"/lib-dynload
+          # getpath 使用此目录作为 exec_prefix 标志；扩展已静态链接，保留空目录即可。
+          mkdir -p "$PYDIR"/lib-dynload
 
           echo "after:  $(du -sh "$DEST" | cut -f1)"
 
@@ -68,11 +70,12 @@ jobs:
           codesign -f -s - --entitlements "$ENT" "$PYTHON_BIN"
           chmod +x "$PYTHON_BIN"
 
-          # 启动器：不要设置 PYTHONHOME。让解释器按可执行文件位置自动定位标准库，
-          # 这样在 roothide 的 jbroot 路径映射下也能正确找到 lib/python3.16。
+          # iOS framework 构建会把编译期 framework 目录写入默认 prefix；作为可重定位的
+          # CLI 包运行时，必须把 PYTHONHOME 指向包根目录，才能找到 lib/python3.16。
           printf '%s\n' \
             '#!/bin/sh' \
             'ROOT="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"' \
+            'export PYTHONHOME="$ROOT"' \
             'exec "$ROOT/bin/python3" "$@"' \
             > "$DEST/run-python3"
           chmod +x "$DEST/run-python3"
